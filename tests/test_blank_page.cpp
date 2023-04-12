@@ -17,31 +17,20 @@ private:
 
 struct Options : OptionsBase {};
 
+OptionsBase return_options_base() {
+    return OptionsBase();
+}
+
 } // namespace blank_page
 } // namespace pybind11_tests
-
-namespace explore {
-
-template <typename F>
-struct drop_return_value {
-    F f;
-
-    explicit drop_return_value(F &&f) : f(std::move(f)) {}
-
-    template <typename... Args>
-    void operator()(Args &&...args) const {
-        (void) f(std::forward<Args>(args)...);
-    }
-};
-
-} // namespace explore
 
 TEST_SUBMODULE(blank_page, m) {
     using namespace pybind11_tests::blank_page;
 
-    py::class_<OptionsBase>(m, "OptionsBase");
+    //py::class_<OptionsBase>(m, "OptionsBase");
 
     py::class_<Options>(m, "Options")
         .def(py::init<>())
-        .def_property("simple_value", &Options::simple_value, &Options::SetSimpleValue);
+        .def_property("simple_value", &Options::simple_value, &Options::SetSimpleValue)
+        ;
 }

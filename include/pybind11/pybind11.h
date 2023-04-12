@@ -81,9 +81,12 @@ PYBIND11_NAMESPACE_END(detail)
 /// Wraps an arbitrary C++ function/method/lambda function/.. into a callable Python object
 class cpp_function : public function {
 public:
+    struct setter_tag {};
+
     cpp_function() = default;
     // NOLINTNEXTLINE(google-explicit-constructor)
     cpp_function(std::nullptr_t) {}
+    cpp_function(const setter_tag&, std::nullptr_t) {}
 
     /// Construct a cpp_function from a vanilla function pointer
     template <typename Return, typename... Args, typename... Extra>
@@ -95,9 +98,18 @@ public:
     /// Construct a cpp_function from a lambda function (possibly with internal state)
     template <typename Func,
               typename... Extra,
-              typename = detail::enable_if_t<detail::is_lambda<Func>::value>>
+              typename = detail::enable_if_t<detail::is_lambda<Func>::value && !std::is_same<Func, setter_tag>::value>>
     // NOLINTNEXTLINE(google-explicit-constructor)
     cpp_function(Func &&f, const Extra &...extra) {
+        initialize(
+            std::forward<Func>(f), (detail::function_signature_t<Func> *) nullptr, extra...);
+    }
+
+    template <typename Func,
+              typename... Extra,
+              typename = detail::enable_if_t<detail::is_lambda<Func>::value && !std::is_same<Func, setter_tag>::value>>
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    cpp_function(const setter_tag&, Func &&f, const Extra &...extra) {
         initialize(
             std::forward<Func>(f), (detail::function_signature_t<Func> *) nullptr, extra...);
     }
@@ -140,6 +152,42 @@ public:
     template <typename Return, typename Class, typename... Arg, typename... Extra>
     // NOLINTNEXTLINE(google-explicit-constructor)
     cpp_function(Return (Class::*f)(Arg...) const &, const Extra &...extra) {
+        initialize([f](const Class *c,
+                       Arg... args) -> Return { return (c->*f)(std::forward<Arg>(args)...); },
+                   (Return(*)(const Class *, Arg...)) nullptr,
+                   extra...);
+    }
+
+    template <typename Return, typename Class, typename... Arg, typename... Extra>
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    cpp_function(const setter_tag &, Return (Class::*f)(Arg...), const Extra &...extra) {
+        initialize(
+            [f](Class *c, Arg... args) -> Return { return (c->*f)(std::forward<Arg>(args)...); },
+            (Return(*)(Class *, Arg...)) nullptr,
+            extra...);
+    }
+
+    template <typename Return, typename Class, typename... Arg, typename... Extra>
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    cpp_function(const setter_tag &, Return (Class::*f)(Arg...) &, const Extra &...extra) {
+        initialize(
+            [f](Class *c, Arg... args) -> Return { return (c->*f)(std::forward<Arg>(args)...); },
+            (Return(*)(Class *, Arg...)) nullptr,
+            extra...);
+    }
+
+    template <typename Return, typename Class, typename... Arg, typename... Extra>
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    cpp_function(const setter_tag &, Return (Class::*f)(Arg...) const, const Extra &...extra) {
+        initialize([f](const Class *c,
+                       Arg... args) -> Return { return (c->*f)(std::forward<Arg>(args)...); },
+                   (Return(*)(const Class *, Arg...)) nullptr,
+                   extra...);
+    }
+
+    template <typename Return, typename Class, typename... Arg, typename... Extra>
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    cpp_function(const setter_tag &, Return (Class::*f)(Arg...) const &, const Extra &...extra) {
         initialize([f](const Class *c,
                        Arg... args) -> Return { return (c->*f)(std::forward<Arg>(args)...); },
                    (Return(*)(const Class *, Arg...)) nullptr,
@@ -1729,7 +1777,7 @@ public:
     template <typename Getter, typename Setter, typename... Extra>
     class_ &
     def_property(const char *name, const Getter &fget, const Setter &fset, const Extra &...extra) {
-        return def_property(name, fget, cpp_function(method_adaptor<type>(fset)), extra...);
+        return def_property(name, fget, cpp_function(cpp_function::setter_tag(), method_adaptor<type>(fset)), extra...);
     }
     template <typename Getter, typename... Extra>
     class_ &def_property(const char *name,
