@@ -841,23 +841,27 @@ public:
 protected:
     template <size_t... Is>
     type implicit_cast(index_sequence<Is...>) & {
-        return type(cast_op<Ts>(std::get<Is>(subcasters))...);
+        using std::get;
+        return type(cast_op<Ts>(get<Is>(subcasters))...);
     }
     template <size_t... Is>
     type implicit_cast(index_sequence<Is...>) && {
-        return type(cast_op<Ts>(std::move(std::get<Is>(subcasters)))...);
+        using std::get;
+        return type(cast_op<Ts>(std::move(get<Is>(subcasters)))...);
     }
 
     static constexpr bool load_impl(const sequence &, bool, index_sequence<>) { return true; }
 
     template <size_t... Is>
     bool load_impl(const sequence &seq, bool convert, index_sequence<Is...>) {
+        using std::get;
+
 #ifdef __cpp_fold_expressions
-        if ((... || !std::get<Is>(subcasters).load(seq[Is], convert))) {
+        if ((... || !get<Is>(subcasters).load(seq[Is], convert))) {
             return false;
         }
 #else
-        for (bool r : {std::get<Is>(subcasters).load(seq[Is], convert)...}) {
+        for (bool r : {get<Is>(subcasters).load(seq[Is], convert)...}) {
             if (!r) {
                 return false;
             }
@@ -872,10 +876,11 @@ protected:
                             const return_value_policy_pack &rvpp,
                             handle parent,
                             index_sequence<Is...>) {
+        using std::get;
         PYBIND11_WORKAROUND_INCORRECT_MSVC_C4100(src, rvpp, parent);
         PYBIND11_WORKAROUND_INCORRECT_GCC_UNUSED_BUT_SET_PARAMETER(rvpp, parent);
         std::array<object, size> entries{{reinterpret_steal<object>(
-            make_caster<Ts>::cast(std::get<Is>(std::forward<T>(src)), rvpp.get(Is), parent))...}};
+            make_caster<Ts>::cast(get<Is>(std::forward<T>(src)), rvpp.get(Is), parent))...}};
         for (const auto &entry : entries) {
             if (!entry) {
                 return handle();
